@@ -1,0 +1,62 @@
+name: Build and release Android APK
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: videosplit-release
+  cancel-in-progress: false
+
+jobs:
+  build-release:
+    name: Build APK and publish release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.13'
+
+      - name: Build installable APK
+        run: |
+          gradle --no-daemon :app:assembleDebug -PciVersionCode=${{ github.run_number }} -PciVersionName=1.0.${{ github.run_number }}
+
+      - name: Prepare APK
+        run: |
+          mkdir -p dist
+          cp app/build/outputs/apk/debug/app-debug.apk "dist/VideoSplit-v1.0.${{ github.run_number }}.apk"
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: VideoSplit-v1.0.${{ github.run_number }}
+          path: dist/*.apk
+          if-no-files-found: error
+
+      - name: Publish in Releases
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v1.0.${{ github.run_number }}
+          name: VideoSplit v1.0.${{ github.run_number }}
+          body: |
+            VideoSplit Android APK, version 1.0.${{ github.run_number }}.
+            Automatically built from main at commit ${{ github.sha }}.
+            This is a DEBUG-SIGNED preview APK for testing; it is not a production-signed Play Store release.
+          prerelease: true
+          generate_release_notes: true
+          files: dist/*.apk
+          fail_on_unmatched_files: true
