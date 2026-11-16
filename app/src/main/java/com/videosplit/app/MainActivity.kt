@@ -2,6 +2,10 @@ package com.videosplit.app
 
 import android.content.Intent
 import android.graphics.Color
+import android.graphics.Typeface
+import android.graphics.drawable.GradientDrawable
+import android.content.res.ColorStateList
+import android.view.View
 import android.media.MediaMetadataRetriever
 import android.net.Uri
 import android.os.Bundle
@@ -73,19 +77,32 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         store = ProjectStore(filesDir)
+        window.statusBarColor = Color.rgb(247, 248, 250)
+        window.navigationBarColor = Color.rgb(247, 248, 250)
+        window.decorView.systemUiVisibility = View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR or View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR
         root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(24, 32, 24, 24)
-            setBackgroundColor(Color.rgb(248, 249, 252))
+            setPadding(dp(20), dp(26), dp(20), dp(32))
+            setBackgroundColor(Color.rgb(247, 248, 250))
         }
         val scroll = ScrollView(this)
         scroll.addView(root)
         setContentView(scroll)
-        label(root, "VideoSplit", 28)
-        hint(root, "Videoları 10 saniyelik parçalara ayır.")
-        button(root, "Video seç") { chooseVideos.launch(arrayOf("video/*")) }
-        hint(root, "Videolar galeriye otomatik kaydedilmez.")
-        label(root, "Projelerim", 20)
+        label(root, "VideoSplit", 30)
+        hint(root, "Video parçalama, kolay ve düzenli.")
+        val pickCard = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(18), dp(18), dp(18), dp(14))
+            background = rounded(0xFFFFFFFF.toInt(), 18f)
+            elevation = dp(1).toFloat()
+            layoutParams = LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(22) }
+        }
+        root.addView(pickCard)
+        label(pickCard, "Yeni video", 19)
+        hint(pickCard, "Bir veya birden fazla video seç. Her biri 10 saniyelik parçalara ayrılır.")
+        button(pickCard, "+  Video seç") { chooseVideos.launch(arrayOf("video/*")) }
+        hint(pickCard, "Dosyalar sadece uygulamada saklanır. İstersen dışa aktarabilirsin.")
+        label(root, "Projelerim", 21)
         projectList = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         root.addView(projectList)
         render()
@@ -204,56 +221,116 @@ class MainActivity : ComponentActivity() {
     private fun render() {
         projectList.removeAllViews()
         val projects = store.all().sortedByDescending { it.created }
-        if (projects.isEmpty()) hint(projectList, "Henüz proje yok. Video seçerek başla.")
+        if (projects.isEmpty()) {
+            val empty = LinearLayout(this).apply {
+                orientation = LinearLayout.VERTICAL
+                setPadding(dp(22), dp(24), dp(22), dp(24))
+                background = rounded(Color.WHITE, 18f)
+            }
+            projectList.addView(empty)
+            label(empty, "Henüz proje yok", 17)
+            hint(empty, "Yukarıdaki butondan bir video seçerek ilk projenizi oluşturun.")
+        }
         for (project in projects) {
             val card = LinearLayout(this).apply {
                 orientation = LinearLayout.VERTICAL
-                setPadding(18, 18, 18, 18)
-                setBackgroundColor(Color.WHITE)
-                elevation = 2f
-                layoutParams = LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = 16 }
+                setPadding(dp(16), dp(16), dp(16), dp(14))
+                background = rounded(Color.WHITE, 18f)
+                elevation = dp(1).toFloat()
+                layoutParams = LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(14) }
             }
             projectList.addView(card)
-            label(card, project.name, 17)
-            hint(card, "${project.status} · ${project.done}/${project.total} parça · ${project.duration / 1000} sn")
-            if (project.total > 0) card.addView(ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal).apply {
-                max = project.total
-                progress = project.done
+            val header = LinearLayout(this).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER_VERTICAL
+            }
+            card.addView(header)
+            header.addView(TextView(this).apply {
+                text = project.name
+                textSize = 16f
+                setTextColor(0xFF1F2937.toInt())
+                setTypeface(null, Typeface.BOLD)
+                maxLines = 2
+                layoutParams = LinearLayout.LayoutParams(0, -2, 1f).apply { rightMargin = dp(8) }
             })
+            val isDone = project.status == "Bitti"
+            header.addView(TextView(this).apply {
+                text = if (isDone) "Hazır" else project.status
+                textSize = 11f
+                setTextColor(if (isDone) 0xFF176B48.toInt() else 0xFF53627B.toInt())
+                setPadding(dp(9), dp(6), dp(9), dp(6))
+                background = rounded(if (isDone) 0xFFE8F6EE.toInt() else 0xFFF0F2F6.toInt(), 9f)
+            })
+            hint(card, "${project.done} / ${project.total} parça   •   ${formatDuration(project.duration)}")
+            if (project.total > 0) {
+                card.addView(ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal).apply {
+                    max = project.total
+                    progress = project.done
+                    progressTintList = ColorStateList.valueOf(0xFF3466D6.toInt())
+                    progressBackgroundTintList = ColorStateList.valueOf(0xFFEAEDF3.toInt())
+                    layoutParams = LinearLayout.LayoutParams(-1, dp(5)).apply { bottomMargin = dp(12) }
+                })
+            }
             if (project.status == "Hata") button(card, "Tekrar dene") {
                 project.status = "Sırada"
                 store.save(project)
                 enqueue(project.id)
                 render()
             }
-            if (project.status == "Bitti") button(card, "Tüm parçaları kaydet") {
+            if (isDone) button(card, "Tüm parçaları kaydet") {
                 selectedProject = project
                 saveProject.launch(null)
             }
-            for ((index, file) in store.parts(project).withIndex()) {
+            val parts = store.parts(project)
+            if (parts.isNotEmpty()) {
+                val divider = View(this).apply {
+                    setBackgroundColor(0xFFF1F2F5.toInt())
+                    layoutParams = LinearLayout.LayoutParams(-1, dp(1)).apply {
+                        topMargin = dp(12)
+                        bottomMargin = dp(9)
+                    }
+                }
+                card.addView(divider)
+            }
+            for ((index, file) in parts.withIndex()) {
                 val row = LinearLayout(this).apply {
                     orientation = LinearLayout.HORIZONTAL
                     gravity = Gravity.CENTER_VERTICAL
+                    setPadding(0, dp(2), 0, dp(2))
                 }
                 card.addView(row)
                 row.addView(TextView(this).apply {
-                    text = "Parça ${index + 1}"
-                    setTextColor(Color.DKGRAY)
+                    text = "Parça %02d".format(index + 1)
+                    textSize = 13f
+                    setTextColor(0xFF4B5563.toInt())
                     layoutParams = LinearLayout.LayoutParams(0, -2, 1f)
                 })
                 smallButton(row, "İzle") { preview(file) }
                 smallButton(row, "Kaydet") { selectedPart = file; savePart.launch(file.name) }
             }
-            button(card, "Projeyi sil") {
-                if (project.id == processingId) {
-                    toast("İşlem sürerken silinemez")
-                } else {
-                    queue.remove(project.id)
-                    store.remove(project.id)
-                    render()
+            val delete = TextView(this).apply {
+                text = "Projeyi sil"
+                textSize = 12f
+                gravity = Gravity.END
+                setTextColor(0xFF9A4B4B.toInt())
+                setPadding(0, dp(16), dp(2), dp(4))
+                setOnClickListener {
+                    if (project.id == processingId) {
+                        toast("İşlem sürerken silinemez")
+                    } else {
+                        queue.remove(project.id)
+                        store.remove(project.id)
+                        render()
+                    }
                 }
             }
+            card.addView(delete)
         }
+    }
+
+    private fun formatDuration(ms: Long): String {
+        val seconds = ms / 1000
+        return "%02d:%02d".format(seconds / 60, seconds % 60)
     }
 
     private fun preview(file: File) {
@@ -297,13 +374,32 @@ class MainActivity : ComponentActivity() {
             setPadding(0, 5, 0, 14)
         })
     }
+    private fun dp(value: Int): Int = (value * resources.displayMetrics.density + 0.5f).toInt()
+    private fun rounded(color: Int, radius: Float): GradientDrawable =
+        GradientDrawable().apply { setColor(color); cornerRadius = dp(radius.toInt()).toFloat() }
+
     private fun button(parent: LinearLayout, text: String, action: () -> Unit) {
-        parent.addView(Button(this).apply { this.text = text; setOnClickListener { action() } })
-    }
-    private fun smallButton(parent: LinearLayout, text: String, action: () -> Unit) {
-        parent.addView(Button(this).apply {
+        parent.addView(TextView(this).apply {
             this.text = text
-            textSize = 11f
+            textSize = 14f
+            setTypeface(null, Typeface.BOLD)
+            gravity = Gravity.CENTER
+            setTextColor(Color.WHITE)
+            background = rounded(0xFF3466D6.toInt(), 12f)
+            layoutParams = LinearLayout.LayoutParams(-1, dp(46))
+            setOnClickListener { action() }
+        })
+    }
+
+    private fun smallButton(parent: LinearLayout, text: String, action: () -> Unit) {
+        parent.addView(TextView(this).apply {
+            this.text = text
+            textSize = 12f
+            gravity = Gravity.CENTER
+            setTextColor(0xFF3466D6.toInt())
+            background = rounded(0xFFF0F4FD.toInt(), 10f)
+            setPadding(dp(14), dp(9), dp(14), dp(9))
+            layoutParams = LinearLayout.LayoutParams(-2, -2).apply { leftMargin = dp(7) }
             setOnClickListener { action() }
         })
     }
