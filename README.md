@@ -18,3 +18,9 @@ Android Studio'da açın; JDK 17 ve Android SDK 36 kullanın. Gradle Sync yapıp
 - İşleme, uygulama arka plandayken kesintisiz devam edecek şekilde servisle henüz desteklenmiyor.
 - Uygulama verileri silinir veya uygulama kaldırılırsa projeler ve yerel parçalar silinir.
 - Kaynak videolar da özel depolamaya kopyalanır; cihazda alan tüketilir.
+
+## Otomatik APK ve sürüm yönetimi
+
+`.github/workflows/android-release.yml`, `main` dalına her push sonrasında ve manuel çalıştırıldığında Android APK derler. Başarılı derlemeler `Releases` altında `v1.0.<GitHub run_number>` etiketiyle yayınlanır. Uygulamanın `versionCode` ve `versionName` değerleri de aynı işlemde otomatik artar. Başarısız derleme yayınlanmaz.
+
+APK debug anahtarıyla imzalanır; test için kurulabilir ancak Play Store/üretim dağıtımı için kalıcı release keystore ve güvenli imzalama gerekir. Sürüm kontrolü için `Actions` sekmesine, indirmek için `Releases` sekmesine bakın.
